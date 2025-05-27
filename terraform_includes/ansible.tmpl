@@ -11,6 +11,8 @@ remote_user = mariadb
 timeout = 600
 pipelining = True
 forks=50
+# Uncomment to show how much time each task takes
+# callbacks_enabled = profile_tasks
 
 [ssh_connection]
 ssh_args = -o ControlMaster=auto -o ControlPersist=60s

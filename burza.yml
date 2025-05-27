@@ -1,0 +1,162 @@
+# Install Burza on primary and replicas
+- hosts: "primary,replicas"
+  become: yes
+  become_user: root
+  gather_facts: no
+  vars:
+    burza_repo_path: "/home/alexander_presniakov/burza"     # Root of Git repo
+    burza_repo_subdir: "burza"                              # Subdirectory in the repo we want to deploy
+    burza_target_path: "/opt/burza"                         # Target path on the remote hosts
+    burza_archive_path: "/tmp/burza_repo.tar.gz"            # Temporary archive path
+  vars_files:
+    - 'inventory/group_vars/distro/{{ ansible_distribution|lower }}{{ ansible_distribution_major_version }}.yml'
+    - 'inventory/group_vars/all.yml'
+
+  tasks:
+    # Install node exporter
+    - name: "Download node exporter"
+      get_url:
+        url: "https://github.com/prometheus/node_exporter/releases/download/v1.8.2/node_exporter-1.8.2.linux-amd64.tar.gz"
+        dest: "/tmp/node_exporter-1.8.2.linux-amd64.tar.gz"
+
+    - name: "Unpack node exporter"
+      unarchive:
+        src: "/tmp/node_exporter-1.8.2.linux-amd64.tar.gz"
+        dest: "/tmp"
+        remote_src: yes
+        creates: /tmp/node_exporter-1.8.2.linux-amd64/node_exporter
+
+    - name: "Install node exporter"
+      command: "cp /tmp/node_exporter-1.8.2.linux-amd64/node_exporter /usr/local/bin/node_exporter"
+      args:
+        creates: "/usr/local/bin/node_exporter"
+
+    # Install prerequisites for sqlite, zlib, bzlib2 and SSL in Python
+    - name: "Install prerequisites for sqlite in Python"
+      package:
+        name:
+          - sqlite-devel
+          - readline-devel
+          - libffi-devel
+          - zlib-devel
+          - openssl-devel
+          - bzip2-devel
+        state: present
+
+    # Install pyenv and Python 3.12
+    - name: "Install pyenv"
+      shell: "curl https://pyenv.run | bash"
+      args:
+        creates: "/root/.pyenv"
+
+    # These changes will not be visible to ansible, because it uses a non-login non-interactive shell
+    - name: Add pyenv init to .bashrc
+      lineinfile:
+        path: /root/.bashrc
+        line: 'export PYENV_ROOT="/root/.pyenv"; export PATH="$PYENV_ROOT/bin:$PATH"; eval "$(pyenv init --path)"; eval "$(pyenv init -)"'
+        create: yes
+        regexp: '^export PYENV_ROOT='
+
+    # Create a wrapper script to properly initialize pyenv for ansible tasks
+    - name: Create pyenv wrapper script
+      copy:
+        dest: "/root/.pyenv/pyenv_wrapper.sh"
+        mode: '0755'
+        content: |
+          #!/bin/bash
+          export PYENV_ROOT="/root/.pyenv"
+          export PATH="$PYENV_ROOT/bin:$PATH"
+          eval "$($PYENV_ROOT/bin/pyenv init --path)"
+          eval "$($PYENV_ROOT/bin/pyenv init -)"
+          exec "$@"
+
+    - name: "Install Python 3.12"
+      shell: "/root/.pyenv/pyenv_wrapper.sh pyenv install 3.12.0"
+      args:
+        creates: "/root/.pyenv/versions/3.12.0"
+
+    - name: "Set Python 3.12 as global version"
+      shell: "/root/.pyenv/pyenv_wrapper.sh pyenv global 3.12.0"
+      args:
+        creates: "/root/.pyenv/version"
+
+    # Install Poetry
+    - name: "Install Poetry"
+      shell: "/root/.pyenv/pyenv_wrapper.sh curl -sSL https://install.python-poetry.org | /root/.pyenv/pyenv_wrapper.sh python3 -"
+      args:
+        creates: "/root/.local/bin/poetry"
+
+    # Copy burza repo to the hosts
+    # If you have access to this file, it means that you have already cloned the burza repository
+    # So we can use rsync to avoid all the hassle of repo cloning permissions
+    - name: Check if Burza directory already exists on target
+      stat:
+        path: "{{ burza_target_path }}"
+      register: burza_dir
+
+    - name: Archive burza subdir from Git repo (control machine)
+      when: not burza_dir.stat.exists
+      run_once: true
+      delegate_to: localhost
+      args:
+        chdir: "{{ burza_repo_path }}"
+      shell: |
+        (
+          git ls-files "{{ burza_repo_subdir }}"
+          git ls-files --others --exclude-standard "{{ burza_repo_subdir }}"
+        ) | while read f; do
+          [ -e "$f" ] && echo "$f"
+        done > /tmp/burza_filelist.txt
+
+        tar czf "{{ burza_archive_path }}" -C "{{ burza_repo_path }}" --files-from=/tmp/burza_filelist.txt
+
+    - name: Copy burza archive to target
+      when: not burza_dir.stat.exists
+      copy:
+        src: "{{ burza_archive_path }}"
+        dest: "{{ burza_archive_path }}"
+
+    - name: Create target directory for Burza
+      when: not burza_dir.stat.exists
+      file:
+        path: "{{ burza_target_path }}"
+        state: directory
+
+    - name: Unpack burza archive on target
+      when: not burza_dir.stat.exists
+      unarchive:
+        src: "{{ burza_archive_path }}"
+        dest: "{{ burza_target_path }}"
+        remote_src: yes
+        extra_opts:
+          - "--strip-components=1"
+
+    - name: Rsync burza repo if already exists
+      when: burza_dir.stat.exists
+      delegate_to: localhost
+      ansible.posix.synchronize:
+        mode: push
+        src: "{{ burza_repo_path }}/{{ burza_repo_subdir }}/"
+        dest: "{{ burza_target_path }}/"
+        rsync_opts:
+          - "--exclude-from={{ burza_repo_path }}/{{ burza_repo_subdir }}/.gitignore"
+
+    # Install burza
+    - name: Set Poetry venv local
+      shell: "/root/.pyenv/pyenv_wrapper.sh /root/.local/bin/poetry config virtualenvs.in-project true"
+      args:
+        chdir: "{{ burza_target_path }}"
+        creates: "{{ burza_target_path }}/.venv"
+
+    - name: Install MariaDB-devel package
+      package:
+        name: MariaDB-devel
+        state: present
+
+    - name: Install Python dependencies with Poetry
+      shell: "/root/.pyenv/pyenv_wrapper.sh /root/.local/bin/poetry install --extras 'mariadb' --no-root --no-interaction --no-ansi"
+      args:
+        chdir: "{{ burza_target_path }}"
+        creates: "{{ burza_target_path }}/.venv"
+
+    
