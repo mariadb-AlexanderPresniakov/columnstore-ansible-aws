@@ -8,7 +8,7 @@
 # Determines if Columnstore LocalStorage or S3 Topology
 variable "use_s3" {
   type    = bool
-  default = true
+  default = false
 }
 
 variable "mariadb_enterprise_token" {
@@ -280,9 +280,9 @@ variable "shared_efs_include_dev_host" {
 }
 
 variable "shared_efs_mount_point" {
-  description = "Directory where EFS volume should be mounted (optional)"
+  description = "Directory where EFS volume should be mounted"
   type        = string
-  default     = "/shared"
+  default     = "/var/lib/columnstore/data1"
 }
 
 ######## Sentry integration for CMAPI

@@ -8,6 +8,21 @@
     - '../inventory/group_vars/all.yml'
 
   tasks:
+    - name: Create mysql group
+      group:
+        name: mysql
+        state: present
+
+    - name: Create mysql user
+      user:
+        name: mysql
+        group: mysql
+        system: yes
+        shell: /bin/false
+        home: /var/lib/mysql
+        create_home: no
+        state: present
+
     - name: Install nfs-utils package
       package:
         name: "{{ nfs_utils }}"
@@ -18,23 +33,20 @@
         path: "{{ shared_efs_mount_point }}"
         state: directory
         mode: '0755'
-        owner: "{{ os_user }}"
-        group: "{{ os_user }}"
+        owner: mysql
+        group: mysql
 
     - name: Check if EFS mount is currently mounted
-      become: true
       shell: 'grep -qE " {{ shared_efs_mount_point | regex_escape() }} nfs4 " /proc/mounts'
       register: mount_output
       ignore_errors: true
 
     - name: Force unmount EFS if already mounted
-      become: true
       command: umount -fn {{ shared_efs_mount_point }}
       when: mount_output.rc == 0
       ignore_errors: true
 
     - name: Remove EFS entry from /etc/fstab by mount point if present
-      become: true
       lineinfile:
         path: /etc/fstab
         state: absent
@@ -48,51 +60,81 @@
         opts: nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2
         state: mounted
 
+    - name: Ensure ownership of shared EFS dir
+      file:
+        path: "{{ shared_efs_mount_point }}"
+        state: directory
+        owner: mysql
+        group: mysql
+        mode: '0755'
+
+
 - hosts: devhost
   become: yes
   become_user: root
   vars_files:
     - '../inventory/group_vars/distro/{{ ansible_distribution | lower }}{{ ansible_distribution_major_version }}.yml'
     - '../inventory/group_vars/all.yml'
+
   tasks:
     - block:
-      - name: Install nfs-utils package
-        package:
-          name: "{{ nfs_utils }}"
-          state: present
+        - name: Create mysql group
+          group:
+            name: mysql
+            state: present
 
-      - name: Check if EFS mount is currently mounted
-        become: true
-        shell: 'grep -qE " {{ shared_efs_mount_point | regex_escape() }} nfs4 " /proc/mounts'
-        register: mount_output
-        ignore_errors: true
+        - name: Create mysql user
+          user:
+            name: mysql
+            group: mysql
+            system: yes
+            shell: /bin/false
+            home: /var/lib/mysql
+            create_home: no
+            state: present
 
-      - name: Force unmount EFS if already mounted
-        become: true
-        command: umount -fn {{ shared_efs_mount_point }}
-        when: mount_output.rc == 0
-        ignore_errors: true
+        - name: Install nfs-utils package
+          package:
+            name: "{{ nfs_utils }}"
+            state: present
 
-      - name: Remove EFS entry from /etc/fstab by mount point if present
-        become: true
-        lineinfile:
-          path: /etc/fstab
-          state: absent
-          regexp: '^[^#]*\s+{{ shared_efs_mount_point | regex_escape() }}\s+nfs4'
+        - name: Check if EFS mount is currently mounted
+          shell: 'grep -qE " {{ shared_efs_mount_point | regex_escape() }} nfs4 " /proc/mounts'
+          register: mount_output
+          ignore_errors: true
 
-      - name: Create EFS mount directory
-        file:
-          path: "{{ shared_efs_mount_point }}"
-          state: directory
-          mode: '0755'
-          owner: "{{ ansible_user_id }}"
-          group: "{{ ansible_user_gid }}"
+        - name: Force unmount EFS if already mounted
+          command: umount -fn {{ shared_efs_mount_point }}
+          when: mount_output.rc == 0
+          ignore_errors: true
 
-      - name: Mount EFS filesystem
-        mount:
-          path: "{{ shared_efs_mount_point }}"
-          src: "{{ shared_efs_dns_name }}:/"
-          fstype: nfs4
-          opts: nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2
-          state: mounted
+        - name: Remove EFS entry from /etc/fstab by mount point if present
+          lineinfile:
+            path: /etc/fstab
+            state: absent
+            regexp: '^[^#]*\s+{{ shared_efs_mount_point | regex_escape() }}\s+nfs4'
+
+        - name: Create EFS mount directory
+          file:
+            path: "{{ shared_efs_mount_point }}"
+            state: directory
+            mode: '0755'
+            owner: mysql
+            group: mysql
+
+        - name: Mount EFS filesystem
+          mount:
+            path: "{{ shared_efs_mount_point }}"
+            src: "{{ shared_efs_dns_name }}:/"
+            fstype: nfs4
+            opts: nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2
+            state: mounted
+
+        - name: Ensure ownership of shared EFS dir
+          file:
+            path: "{{ shared_efs_mount_point }}"
+            state: directory
+            owner: mysql
+            group: mysql
+            mode: '0755'
       when: shared_efs_include_dev_host | bool
