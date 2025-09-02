@@ -78,7 +78,7 @@ aws_mariadb_instance_size = "c6a.8xlarge"
 aws_maxscale_instance_size = "c6a.large"
 
 # Number of GB for EBS root storage on columnstore nodes
-columnstore_node_root_block_size = 1000
+columnstore_node_root_block_size = 50
 
 # Number of GB for EBS root storage on maxscale nodes
 maxscale_node_root_block_size = 100
@@ -106,6 +106,6 @@ dev_drone_key = ""
 
 create_shared_efs = false
 shared_efs_include_dev_host = false
-shared_efs_mount_point = "/shared"
+shared_efs_mount_point = "/var/lib/columnstore/data1"
 
 sentry_dsn = ""

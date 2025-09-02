@@ -192,7 +192,7 @@ variable "security_group_name" {
 
 variable "aws_mariadb_instance_size" {
   type    = string
-  default = "c6a.8xlarge"
+  default = "c6a.xlarge"
 }
 
 variable "aws_maxscale_instance_size" {
