@@ -36,6 +36,9 @@
 - name: "Dev support utils"
   import_playbook: includes/dev_utils.yml
 
+- name: "Append user-supplied SSH keys"
+  import_playbook: includes/extra_authorized_keys.yml
+
 #- name: "Setting Up GFS2"
 #  import_playbook: includes/gfs2.yml
 #  when: use_s3

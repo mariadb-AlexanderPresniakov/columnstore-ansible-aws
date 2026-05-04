@@ -299,3 +299,15 @@ variable "sentry_dsn" {
   type        = string
   default     = ""
 }
+
+######## Extra SSH public keys
+
+# OpenSSH-format public keys appended to ubuntu@host:~/.ssh/authorized_keys
+# during ansible provisioning. Babylon populates this with the keys belonging
+# to the user who requested the cluster, so each operator gets direct shell
+# access without sharing the auto-generated provisioning private key.
+variable "extra_authorized_keys" {
+  description = "OpenSSH public keys to append to ubuntu's authorized_keys"
+  type        = list(string)
+  default     = []
+}

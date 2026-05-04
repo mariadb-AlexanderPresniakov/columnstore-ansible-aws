@@ -65,3 +65,9 @@ internal_efs_dns_name: "${internal_efs_dns_name}"
 
 # Sentry
 sentry_dsn: "${sentry_dsn}"
+
+# Extra SSH public keys appended to ubuntu's authorized_keys
+extra_authorized_keys:
+%{ for k in extra_authorized_keys ~}
+  - ${jsonencode(k)}
+%{ endfor ~}

@@ -101,6 +101,7 @@ resource "local_file" "AnsibleVariables" {
       internal_efs_enabled     = var.use_s3 ? false : true,
       internal_efs_dns_name    = var.use_s3 ? "" : aws_efs_file_system.internal_efs[0].dns_name,
       sentry_dsn               = var.sentry_dsn,
+      extra_authorized_keys    = var.extra_authorized_keys,
     }
   )
   filename = "inventory/group_vars/all.yml"

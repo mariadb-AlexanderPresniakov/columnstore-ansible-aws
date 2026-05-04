@@ -1,0 +1,43 @@
+---
+
+# Append OpenSSH public keys from var ``extra_authorized_keys`` to the
+# default cloud-init user's ``~/.ssh/authorized_keys``. Each key is added
+# with ``exclusive: no`` so we never wipe the auto-generated provisioning
+# key — losing that would leave the cluster unmanageable until destroy.
+#
+# ``os_user`` is set per distro in ``inventory/group_vars/distro/*.yml``
+# (ubuntu/rocky/centos all map to whatever cloud-init's default account
+# is). The ``mariadb`` user gets the same treatment so direct SSH as
+# either ubuntu@ or mariadb@ works.
+
+- hosts: "primary,replicas,maxscale"
+  become: yes
+  become_user: root
+  gather_facts: no
+  vars_files:
+    - '../inventory/group_vars/all.yml'
+
+  tasks:
+    - name: "Append extra SSH public keys to {{ os_user }}'s authorized_keys"
+      ansible.posix.authorized_key:
+        user: "{{ os_user }}"
+        key: "{{ item }}"
+        state: present
+        exclusive: no
+      loop: "{{ extra_authorized_keys | default([]) }}"
+      when: extra_authorized_keys is defined and extra_authorized_keys | length > 0
+
+    - name: "Append extra SSH public keys to mariadb's authorized_keys"
+      ansible.posix.authorized_key:
+        user: mariadb
+        key: "{{ item }}"
+        state: present
+        exclusive: no
+      loop: "{{ extra_authorized_keys | default([]) }}"
+      when: extra_authorized_keys is defined and extra_authorized_keys | length > 0
+      # The mariadb user is created by terraform_includes/create_user.sh
+      # via cloud-init; it may not exist yet on a host where cloud-init
+      # is still racing the first ansible pass, so don't fail provision
+      # just because mariadb hasn't materialised. Re-runs of the play
+      # close the gap on retry.
+      ignore_errors: yes
