@@ -42,9 +42,9 @@
       when: mariadb_has_nvme
 
     - name: Create volume group
-      command: vgcreate vg_nvme /dev/{{ unpartitioned_nvme_devices[0] }} /dev/{{ unpartitioned_nvme_devices[1] }}
+      command: "vgcreate vg_nvme {{ unpartitioned_nvme_devices | map('regex_replace', '^', '/dev/') | list | join(' ') }}"
       ignore_errors: true
-      when: mariadb_has_nvme and unpartitioned_nvme_devices | length >= 2
+      when: mariadb_has_nvme and unpartitioned_nvme_devices | length >= 1
 
     - name: Create logical volume
       command: lvcreate -l 100%FREE -n lv_data vg_nvme
@@ -93,6 +93,12 @@
         state: directory
       when: mariadb_has_nvme
 
+    - name: Remove existing /var/lib/columnstore if directory
+      file:
+        path: /var/lib/columnstore
+        state: absent
+      when: mariadb_has_nvme
+
     - name: Create symlink for /var/lib/columnstore
       file:
         src: /mnt/data/columnstore
@@ -100,10 +106,36 @@
         state: link
       when: mariadb_has_nvme
 
+    - name: Remove existing /tmp/columnstore_tmp_files if directory
+      file:
+        path: /tmp/columnstore_tmp_files
+        state: absent
+      when: mariadb_has_nvme
+
     - name: Create symlink for /tmp/columnstore_tmp_files
       file:
         src: /mnt/data/columnstore_tmp_files
         dest: /tmp/columnstore_tmp_files
+        state: link
+      when: mariadb_has_nvme
+
+    - name: Create mysql directory on /mnt/data
+      file:
+        path: /mnt/data/mysql
+        state: directory
+        mode: '0755'
+      when: mariadb_has_nvme
+
+    - name: Remove existing /var/lib/mysql if directory
+      file:
+        path: /var/lib/mysql
+        state: absent
+      when: mariadb_has_nvme
+
+    - name: Create symlink for /var/lib/mysql
+      file:
+        src: /mnt/data/mysql
+        dest: /var/lib/mysql
         state: link
       when: mariadb_has_nvme
 

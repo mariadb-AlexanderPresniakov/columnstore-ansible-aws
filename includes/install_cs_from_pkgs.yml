@@ -38,6 +38,13 @@
       mode: '0755'
     when: cs_package_manager_custom_version is defined and cs_package_manager_custom_version != "" and cs_package_manager_custom_version is not none
 
+  - name: "Patch cs_package_manager to use mariadb_version instead of hardcoded 10.6"
+    replace:
+      path: "{{ mariadb_rpms_path }}/cs_package_manager.sh"
+      regexp: 'product="10\.6-enterprise"'
+      replace: 'product="{{ mariadb_version }}-enterprise"'
+    when: cs_package_manager_custom_version is defined and cs_package_manager_custom_version != "" and cs_package_manager_custom_version is not none
+
 - hosts: "primary,replicas"
   become: yes
   become_user: root

@@ -19,10 +19,18 @@
   - name: "Scanning For Running Services"
     service_facts:
 
-  - name: "Setting SELinux Permissive"
-    selinux:
-      policy: targeted
-      state: permissive
+  - name: "Setting SELinux Permissive (runtime)"
+    command: setenforce 0
+    changed_when: true
+    failed_when: false
+    when: (ansible_distribution|lower == 'centos') or
+          (ansible_distribution|lower == 'rocky')
+
+  - name: "Setting SELinux Permissive (persistent)"
+    lineinfile:
+      path: /etc/selinux/config
+      regexp: '^SELINUX='
+      line: 'SELINUX=permissive'
     when: (ansible_distribution|lower == 'centos') or
           (ansible_distribution|lower == 'rocky')
 

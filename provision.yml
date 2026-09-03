@@ -40,9 +40,9 @@
 #  import_playbook: includes/gfs2.yml
 #  when: use_s3
 
-- name: "Configure internal EFS for ColumnStore data (when not using S3)"
+- name: "Configure internal EFS for ColumnStore data (when not using S3 and not NVMe)"
   import_playbook: includes/internal_efs.yml
-  when: not use_s3 | bool
+  when: not use_s3 | bool and not mariadb_has_nvme | default(false) | bool
 
 - name: "Configuring NVMe and Symlinks"
   import_playbook: includes/configure_nvme.yml
